@@ -16,6 +16,7 @@ Each folder is one project, and each WGSL file at a project's top level is one o
 
 The engine checks this repository out as its `wgpup/` submodule.
 Its book describes the pass file format, these projects, and how their generated files are made, in `docs/src/new-pass.md`, `docs/src/bundled-passes.md`, and `docs/src/mpv-shaders.md` of the engine repository.
+The generated pass files are committed, so offering them needs no Python; the generators run from the engine root, and the NIS generator imports the engine's `tools/convert_mpv_shader.py`.
 The engine's tests check every pass file against its pass rules, and the upstream sources against the SHA-256 their `PROVENANCE.txt` lists.
 From the engine root, `npm run passes` copies this checkout's pass files into `bin/wgpup/`, where a host serves them and the sandbox lists them.
 
