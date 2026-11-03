@@ -1,0 +1,2 @@
+# The generators' bytecode, which the engine's converter tests leave when they import them
+__pycache__/

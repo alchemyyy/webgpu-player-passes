@@ -1,0 +1,5 @@
+* text=auto eol=lf
+
+# The NIS sources and license are copied unmodified, CRLF and all, so their SHA-256 matches upstream's
+/nis/glsl/** -text
+/licenses/NIS-LICENSE -text

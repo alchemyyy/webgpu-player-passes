@@ -1,0 +1,113 @@
+# Publishes every pass file as a GitHub release when run by hand on main with a version (Actions > Release > Run workflow).
+# A pass file is a WGSL file at the top level of a pass project, and no two projects may use one file name, so the release carries them flat,
+# as hosts serve them, beside the upstream license texts and SHA256SUMS.
+# Without a version the run is a dry run, which collects the release files and keeps them as the run's artifact.
+name: Release
+
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: Version to release, three parts without a leading v, such as 0.2.0; empty for a dry run
+        required: false
+        type: string
+
+permissions:
+  contents: read
+
+# One release at a time
+concurrency:
+  group: release
+  cancel-in-progress: false
+
+defaults:
+  run:
+    shell: bash
+
+env:
+  RELEASE_NAME: WebGPU Player passes
+
+jobs:
+  release:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    # Creates the release and its tag
+    permissions:
+      contents: write
+    # NOTE: Scripts read the inputs from the environment only, because ${{ }} inside a script would splice them into shell code
+    env:
+      VERSION: ${{ inputs.version }}
+      GH_TOKEN: ${{ github.token }}
+    steps:
+      # The release tag names the commit that was collected, which only main may be
+      - name: Check the version
+        if: env.VERSION != ''
+        run: |
+          if [[ ! "$VERSION" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+            echo "::error::The version is three numbers without a leading v, not $VERSION"
+            exit 1
+          fi
+          if [[ "$GITHUB_REF" != refs/heads/main ]]; then
+            echo "::error::Run the release on main, not $GITHUB_REF_NAME"
+            exit 1
+          fi
+          if git ls-remote --exit-code --tags "$GITHUB_SERVER_URL/$GITHUB_REPOSITORY.git" "refs/tags/v$VERSION" > /dev/null; then
+            echo "::error::v$VERSION already exists"
+            exit 1
+          fi
+          echo "TAG=v$VERSION" >> "$GITHUB_ENV"
+
+      - name: Check out the pass projects
+        uses: actions/checkout@v7
+
+      # The engine's pass file build does the same: every project's top-level WGSL files, and a failure on two of one name
+      - name: Collect the release files
+        run: |
+          release_directory="$RUNNER_TEMP/release"
+          mkdir -p "$release_directory"
+          declare -A project_by_file_name=()
+          for pass_file in */*.wgsl; do
+            [ -f "$pass_file" ] || continue
+            file_name="${pass_file##*/}"
+            project="${pass_file%%/*}"
+            if [ -n "${project_by_file_name[$file_name]:-}" ]; then
+              echo "::error::pass-name-duplicate: $file_name in ${project_by_file_name[$file_name]} and $project"
+              exit 1
+            fi
+            project_by_file_name[$file_name]="$project"
+            cp "$pass_file" "$release_directory"/
+          done
+          if [ "${#project_by_file_name[@]}" -eq 0 ]; then
+            echo '::error::No project holds a pass file'
+            exit 1
+          fi
+          cp licenses/* "$release_directory"/
+          (cd "$release_directory" && sha256sum -- * > SHA256SUMS)
+          {
+            echo "Collected from $GITHUB_REPOSITORY@$GITHUB_SHA."
+            echo
+            echo '| Pass file | Project | Bytes | SHA-256 |'
+            echo '| --- | --- | ---: | --- |'
+            for pass_file in "$release_directory"/*.wgsl; do
+              file_name="${pass_file##*/}"
+              echo "| \`$file_name\` | \`${project_by_file_name[$file_name]}\` | $(stat -c %s "$pass_file") | \`$(sha256sum "$pass_file" | cut -d ' ' -f 1)\` |"
+            done
+            echo
+            echo 'The license texts of the upstream shaders the Anime4K and NIS passes come from are attached.'
+            echo '`SHA256SUMS` lists the SHA-256 of every file.'
+          } > "$RUNNER_TEMP/release-notes.md"
+          cat "$RUNNER_TEMP/release-notes.md"
+          echo "RELEASE_DIRECTORY=$release_directory" >> "$GITHUB_ENV"
+
+      - name: Keep the release files
+        uses: actions/upload-artifact@v7
+        with:
+          name: webgpu-player-passes
+          path: ${{ env.RELEASE_DIRECTORY }}
+          if-no-files-found: error
+
+      - name: Publish the GitHub release
+        if: env.VERSION != ''
+        run: |
+          gh release create "$TAG" "$RELEASE_DIRECTORY"/* --target "$GITHUB_SHA" \
+            --title "$RELEASE_NAME $VERSION" --notes-file "$RUNNER_TEMP/release-notes.md"
