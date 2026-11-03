@@ -1,8 +1,8 @@
 # WebGPU Player passes
 
 The pass projects of [WebGPU Player](https://github.com/alchemyyy/WebGPU-Player): optional WGSL passes a host may offer its users, who add them to their presentation preset.
-Each folder is one project, and each WGSL file at a project's top level is one of its pass files, in the engine's pass file format, under a file name no other project uses.
-`licenses/` holds the license texts of the upstream shaders the Anime4K and NIS passes come from.
+Each folder but `licenses/` is one project, and each WGSL file at a project's top level is one of its pass files, in the engine's pass file format, under a file name no other project uses.
+`licenses/` holds the license texts of the upstream shaders the Anime4K and NIS passes come from, and no WGSL file.
 
 | Project | Pass files | What it does |
 | --- | --- | --- |
